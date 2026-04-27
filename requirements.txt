@@ -1,0 +1,16 @@
+# --- Core Deep Learning (CUDA 12.4 support) ---
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch>=2.4.0
+torchvision>=0.19.0
+torchaudio>=2.4.0
+
+# --- Neuromorphic Frameworks ---
+sinabs>=3.1.0
+
+# --- Data & Analysis (Latest stable for Python 3.12) ---
+pandas>=2.2.2
+numpy>=1.26.0,<2.0.0
+matplotlib>=3.8.0
+h5py>=3.10.0
+scipy>=1.12.0
+tqdm>=4.66.0
