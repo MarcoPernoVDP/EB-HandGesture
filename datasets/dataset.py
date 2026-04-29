@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 import h5py
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch.utils.data import Dataset
 
 FILENAME_RE = r"^(?P<subject>[^_]+)_(?P<distance>[^_]+)_(?P<class_idx>.+)$"
@@ -140,6 +141,21 @@ def build_label_mapping(cache_dir: Path, splits: List[str], t_min: int, t_max: i
     return label_map
 
 
+def _downsample_T(x: np.ndarray, t_target: int, mode: str) -> np.ndarray:
+    t = x.shape[0]
+    if t == t_target:
+        return x
+    if t % t_target != 0:
+        return x
+    factor = t // t_target
+    x_reshaped = x.reshape(t_target, factor, *x.shape[1:])
+    if mode == "sum":
+        return x_reshaped.sum(axis=1)
+    if mode == "mean":
+        return x_reshaped.mean(axis=1)
+    return x
+
+
 def _pad_or_crop_T(x: np.ndarray, t_target: int) -> np.ndarray:
     t = x.shape[0]
     if t == t_target:
@@ -160,6 +176,9 @@ class EBHandGestureDataset(Dataset):
         t_max: int,
         t_target: int,
         splits_for_labels: List[str],
+        spatial_size: int | None = None,
+        spatial_mode: str = "area",
+        temporal_mode: str = "sum",
     ) -> None:
         self.data_root = Path(data_root)
         self.cache_dir = Path(cache_dir)
@@ -167,6 +186,9 @@ class EBHandGestureDataset(Dataset):
         self.rows = payload.get("valid", [])
         self.label_map = build_label_mapping(self.cache_dir, splits_for_labels, t_min, t_max)
         self.t_target = t_target
+        self.temporal_mode = temporal_mode
+        self.spatial_size = spatial_size
+        self.spatial_mode = spatial_mode
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -180,7 +202,18 @@ class EBHandGestureDataset(Dataset):
             data = data[:, None, :, :]
         elif data.ndim != 4:
             raise ValueError(f"Unsupported data shape: {data.shape}")
+        data = _downsample_T(data, self.t_target, self.temporal_mode)
         data = _pad_or_crop_T(data, self.t_target)
+        if self.spatial_size is not None:
+            # Resize each time bin to Speck-friendly spatial resolution.
+            data_torch = torch.from_numpy(data.astype(np.float32))
+            data_torch = F.interpolate(
+                data_torch,
+                size=(self.spatial_size, self.spatial_size),
+                mode=self.spatial_mode,
+                align_corners=False if self.spatial_mode in {"bilinear", "bicubic"} else None,
+            )
+            data = data_torch.numpy()
         x = torch.from_numpy(data.astype(np.float32))
         label_name = row.get("gesture_class")
         y = self.label_map[label_name]

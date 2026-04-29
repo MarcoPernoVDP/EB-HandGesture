@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +33,13 @@ def main() -> None:
     args = parse_args()
     cfg = load_config(args.config)
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    log = logging.getLogger("train")
+
     set_seed(cfg["training"]["seed"])
 
     data_root = Path(cfg["paths"]["data_root"])
@@ -41,14 +50,41 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     device = torch.device(cfg["training"]["device"] if torch.cuda.is_available() else "cpu")
+    log.info("Device: %s | AMP: %s", device, cfg["training"]["amp"])
 
     t_min = cfg["dataset"]["t_min"]
     t_max = cfg["dataset"]["t_max"]
     t_target = cfg["dataset"]["t_target"]
     splits = cfg["dataset"]["valid_splits"]
 
-    train_ds = EBHandGestureDataset(data_root, "train", cache_dir, t_min, t_max, t_target, splits)
-    val_ds = EBHandGestureDataset(data_root, "val", cache_dir, t_min, t_max, t_target, splits)
+    spatial_size = cfg["dataset"].get("spatial_size")
+    spatial_mode = cfg["dataset"].get("spatial_mode", "area")
+    temporal_mode = cfg["dataset"].get("temporal_mode", "sum")
+
+    train_ds = EBHandGestureDataset(
+        data_root,
+        "train",
+        cache_dir,
+        t_min,
+        t_max,
+        t_target,
+        splits,
+        spatial_size=spatial_size,
+        spatial_mode=spatial_mode,
+        temporal_mode=temporal_mode,
+    )
+    val_ds = EBHandGestureDataset(
+        data_root,
+        "val",
+        cache_dir,
+        t_min,
+        t_max,
+        t_target,
+        splits,
+        spatial_size=spatial_size,
+        spatial_mode=spatial_mode,
+        temporal_mode=temporal_mode,
+    )
 
     train_loader = DataLoader(
         train_ds,
@@ -66,6 +102,7 @@ def main() -> None:
     )
 
     num_classes = len(train_ds.label_map)
+    log.info("Train samples: %d | Val samples: %d | Classes: %d", len(train_ds), len(val_ds), num_classes)
     model = SNNBaseline(
         in_channels=cfg["model"]["in_channels"],
         channels=cfg["model"]["channels"],
@@ -88,13 +125,16 @@ def main() -> None:
 
     loss_fn = build_loss()
     use_amp = bool(cfg["training"]["amp"]) and device.type == "cuda"
-    scaler = torch.cuda.amp.GradScaler("cuda") if use_amp else torch.cuda.amp.GradScaler(enabled=False)
+    scaler = torch.amp.GradScaler('cuda', enabled=use_amp)
 
-    writer = SummaryWriter(log_dir=str(out_dir / "tensorboard"))
+    tb_dir = out_dir / "tensorboard"
+    writer = SummaryWriter(log_dir=str(tb_dir), flush_secs=5)
+    log.info("TensorBoard logdir: %s", tb_dir)
     state = TrainState(epoch=0, best_val_acc=0.0)
 
     for epoch in range(1, cfg["training"]["epochs"] + 1):
         state.epoch = epoch
+        t0 = time.time()
         train_loss = train_one_epoch(
             model,
             train_loader,
@@ -107,11 +147,24 @@ def main() -> None:
         )
         metrics = evaluate(model, val_loader, device, loss_fn)
         scheduler.step()
+        dt = time.time() - t0
+
+        log.info(
+            "Epoch %d/%d | time %.1fs | train_loss %.4f | val_loss %.4f | val_acc %.4f | val_f1 %.4f",
+            epoch,
+            cfg["training"]["epochs"],
+            dt,
+            train_loss,
+            metrics["loss"],
+            metrics["accuracy"],
+            metrics["macro_f1"],
+        )
 
         writer.add_scalar("loss/train", train_loss, epoch)
         writer.add_scalar("loss/val", metrics["loss"], epoch)
         writer.add_scalar("acc/val", metrics["accuracy"], epoch)
         writer.add_scalar("f1/val", metrics["macro_f1"], epoch)
+        writer.flush()
 
         if metrics["accuracy"] > state.best_val_acc:
             state.best_val_acc = metrics["accuracy"]

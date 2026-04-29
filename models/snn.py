@@ -23,13 +23,31 @@ class SNNBaseline(nn.Module):
     ) -> None:
         super().__init__()
         ch1, ch2 = list(channels)
-        lif_params = lif_params or {"tau_mem": 20.0, "tau_syn": 5.0, "v_th": 1.0}
+        lif_params = lif_params or {
+            "tau_mem": 20.0,
+            "tau_syn": 5.0,
+            "spike_threshold": 1.0,
+        }
 
-        self.conv1 = nn.Conv2d(in_channels, ch1, kernel_size=3, padding=1, bias=False)
-        self.conv2 = nn.Conv2d(ch1, ch2, kernel_size=3, padding=1, bias=False)
-        self.pool = nn.AvgPool2d(2)
+        self.conv1 = nn.Conv2d(
+            in_channels,
+            ch1,
+            kernel_size=3,
+            stride=2,
+            padding=1,
+            bias=False,
+        )
+        self.bn1 = nn.BatchNorm2d(ch1)
+        self.conv2 = nn.Conv2d(
+            ch1,
+            ch2,
+            kernel_size=3,
+            stride=2,
+            padding=1,
+            bias=False,
+        )
+        self.bn2 = nn.BatchNorm2d(ch2)
         self.gap = nn.AdaptiveAvgPool2d((1, 1))
-        self.drop = nn.Dropout(drop)
 
         if sl is not None:
             self.lif1 = sl.LIF(**lif_params)
@@ -42,12 +60,13 @@ class SNNBaseline(nn.Module):
             nn.Flatten(),
             nn.Linear(ch2, hidden_dim),
             nn.ReLU(),
-            nn.Dropout(drop),
             nn.Linear(hidden_dim, num_classes),
         )
 
     def reset_states(self) -> None:
         for module in self.modules():
+            if module is self:
+                continue
             if hasattr(module, "reset_states"):
                 module.reset_states()
 
@@ -59,9 +78,9 @@ class SNNBaseline(nn.Module):
         logits = None
         for step in range(t):
             xt = x[:, step]
-            z = self.pool(self.lif1(self.conv1(xt)))
-            z = self.pool(self.lif2(self.conv2(z)))
-            z = self.drop(self.gap(z))
+            z = self.lif1(self.bn1(self.conv1(xt)))
+            z = self.lif2(self.bn2(self.conv2(z)))
+            z = self.gap(z)
             out = self.head(z)
             logits = out if logits is None else logits + out
         return logits / float(t)

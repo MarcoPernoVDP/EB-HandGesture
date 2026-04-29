@@ -6,6 +6,7 @@ from typing import Dict
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from utils.metrics import accuracy, confusion_matrix, macro_f1_from_cm
 
@@ -28,11 +29,13 @@ def train_one_epoch(
 ) -> float:
     model.train()
     total_loss = 0.0
-    for x, y in loader:
+    pbar = tqdm(loader, desc="Training Batch", leave=False)
+
+    for x, y in pbar:
         x = x.to(device, non_blocking=True)
         y = y.to(device, non_blocking=True)
         optimizer.zero_grad(set_to_none=True)
-        with torch.cuda.amp.autocast(enabled=use_amp):
+        with torch.amp.autocast(device_type=device.type, enabled=use_amp):
             logits = model(x)
             loss = loss_fn(logits, y)
         scaler.scale(loss).backward()

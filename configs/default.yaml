@@ -32,10 +32,13 @@ model:
   lif:
     tau_mem: 20.0
     tau_syn: 5.0
-    v_th: 1.0
+    spike_threshold: 1.0
 
 dataset:
   t_min: 300
   t_max: 302
-  t_target: 301
+  t_target: 100
+  spatial_size: 128
+  spatial_mode: "area"
+  temporal_mode: "sum"
   valid_splits: ["train", "val", "test"]

@@ -36,6 +36,21 @@
       "env": {
         "PYTHONPATH": "${workspaceFolder}"
       }
+    },
+    {
+      "name": "TensorBoard",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "tensorboard",
+      "args": [
+        "--logdir",
+        "outputs/tensorboard",
+        "--port",
+        "6006"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
     }
   ]
 }

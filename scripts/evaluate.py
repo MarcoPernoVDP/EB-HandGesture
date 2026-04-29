@@ -48,7 +48,22 @@ def main() -> None:
     t_target = cfg["dataset"]["t_target"]
     splits = cfg["dataset"]["valid_splits"]
 
-    eval_ds = EBHandGestureDataset(data_root, args.split, cache_dir, t_min, t_max, t_target, splits)
+    spatial_size = cfg["dataset"].get("spatial_size")
+    spatial_mode = cfg["dataset"].get("spatial_mode", "area")
+    temporal_mode = cfg["dataset"].get("temporal_mode", "sum")
+
+    eval_ds = EBHandGestureDataset(
+        data_root,
+        args.split,
+        cache_dir,
+        t_min,
+        t_max,
+        t_target,
+        splits,
+        spatial_size=spatial_size,
+        spatial_mode=spatial_mode,
+        temporal_mode=temporal_mode,
+    )
     eval_loader = DataLoader(
         eval_ds,
         batch_size=cfg["training"]["batch_size"],
