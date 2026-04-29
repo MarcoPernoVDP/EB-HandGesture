@@ -1,0 +1,41 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Train SNN",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/train.py",
+      "args": [
+        "--config",
+        "configs/default.yaml"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    },
+    {
+      "name": "Evaluate SNN",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/evaluate.py",
+      "args": [
+        "--config",
+        "configs/default.yaml",
+        "--checkpoint",
+        "checkpoints/best.pt",
+        "--split",
+        "test"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    }
+  ]
+}

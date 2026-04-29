@@ -1,0 +1,41 @@
+project:
+  name: "EB-HandGesture"
+  root: "."
+
+paths:
+  data_root: "data"
+  cache_dir: "cache"
+  checkpoints: "checkpoints"
+  outputs: "outputs"
+
+training:
+  device: "cuda"
+  batch_size: 8
+  num_workers: 2
+  epochs: 20
+  lr: 0.001
+  weight_decay: 0.0001
+  grad_clip: 1.0
+  amp: true
+  log_every: 20
+  save_every: 1
+  seed: 42
+  scheduler:
+    name: "cosine"
+    t_max: 20
+
+model:
+  in_channels: 2
+  channels: [16, 32]
+  hidden_dim: 128
+  drop: 0.1
+  lif:
+    tau_mem: 20.0
+    tau_syn: 5.0
+    v_th: 1.0
+
+dataset:
+  t_min: 300
+  t_max: 302
+  t_target: 301
+  valid_splits: ["train", "val", "test"]
